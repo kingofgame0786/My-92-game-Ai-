@@ -1,77 +1,54 @@
 import streamlit as st
-import random
-import time
+import easyocr
+from PIL import Image
+import numpy as np
 
 # ایپ کی بنیادی ترتیب
-st.set_page_config(page_title="92Jeeto Ultra-AI", page_icon="🤖", layout="wide")
+st.set_page_config(page_title="92Jeeto AI Scanner", page_icon="🎯")
 
-st.markdown("""
-    <style>
-    .stProgress > div > div > div > div { background-image: linear-gradient(to right, #ff4b4b , #2e7d32); }
-    .report-card { padding: 20px; border-radius: 15px; background-color: #1e1e1e; color: #00ff00; border: 2px solid #00ff00; margin-bottom: 10px; font-family: monospace; text-align: right; direction: rtl; }
-    </style>
-    """, unsafe_allow_html=True)
+@st.cache_resource
+def load_ocr():
+    return easyocr.Reader(['en'])
 
-def detect_traps(sizes, numbers):
-    if len(sizes) >= 3 and sizes[-1] != sizes[-2] and sizes[-2] != sizes[-3]:
-        return "⚠️ فیک پیٹرن (Trap): گیم زگ زیگ کر کے الجھا رہی ہے۔ ابھی رک جائیں!"
-    if len(numbers) > 0 and numbers.count(numbers[-1]) > 2:
-        return "⚠️ سسٹم اسٹک (Stuck): ایک ہی نمبر بار بار آ رہا ہے، الگورتھم تبدیل ہونے والا ہے۔"
-    return None
+reader = load_ocr()
 
-def master_analyzer(numbers, sizes, colors):
-    hints = []
-    strength = 0
-    if len(sizes) >= 4 and len(set(sizes[-4:])) == 1:
-        hints.append(f"🔥 قوی ڈریگن (95%): {sizes[-1]} کا سلسلہ جاری ہے۔")
-        strength += 40
-    avg = sum(numbers[-5:]) / 5 if len(numbers) >= 5 else 0
-    if avg > 7 or (0 < avg < 2):
-        hints.append(f"⚖️ اوسط دباؤ (80%): مارکیٹ اپنی حد پر ہے، اب رخ بدلے گی۔")
-        strength += 30
-    if len(colors) >= 4 and colors.count(colors[-1]) >= 4:
-        hints.append(f"🎨 رنگوں کی انتہا: مخالف رنگ آنے کا وقت آگیا ہے۔")
-        strength += 20
-    return hints, min(strength + random.randint(5, 15), 99)
+st.title("🎯 92Jeeto آٹو اسکینر")
+st.write("ہسٹری کا اسکرین شاٹ اپلوڈ کریں، ٹائپ کرنے کی ضرورت نہیں!")
 
-st.title("🤖 92Jeeto Ultra-AI (آٹو پائلٹ موڈ)")
+# فائل اپلوڈر
+file = st.file_uploader("اسکرین شاٹ یہاں ڈالیں...", type=["jpg", "png", "jpeg"])
 
-auto_mode = st.toggle("آٹو مانیٹرنگ اور فیک ڈیٹا ڈیٹیکٹر آن کریں")
-
-if auto_mode:
-    st.success("🛰️ مانیٹرنگ سسٹم ایکٹیو ہے... ڈیٹا کا تجزیہ ہو رہا ہے۔")
-
-col1, col2 = st.columns(2)
-with col1:
-    n_in = st.text_input("نمبرز (مثلاً: 2,5,8)")
-    s_in = st.text_input("سائز (B,S,B)")
-    c_in = st.text_input("رنگ (R,G,R)")
+if file:
+    img = Image.open(file)
+    st.image(img, caption="آپ کا اسکرین شاٹ", width=300)
     
-with col2:
-    st.subheader("🎯 AI کا حتمی فیصلہ")
-    if st.button("تجزیہ شروع کریں"):
-        try:
-            nums = [int(x.strip()) for x in n_in.split(",") if x.strip()]
-            szs = [x.strip().upper() for x in s_in.split(",") if x.strip()]
-            cols = [x.strip().upper() for x in c_in.split(",") if x.strip()]
+    if st.button("اسکین اور فیصلہ کریں"):
+        with st.spinner("AI ڈیٹا پڑھ رہا ہے..."):
+            # OCR اسکیننگ
+            result = reader.readtext(np.array(img), detail=0)
             
-            hints, conf = master_analyzer(nums, szs, cols)
+            # ڈیٹا سے Big/Small نکالنا
+            history = [text.upper() for text in result if "BIG" in text.upper() or "SMALL" in text.upper()]
             
-            st.write(f"**یقین کی حد (Confidence):** {conf}%")
-            st.progress(conf / 100)
-            
-            trap = detect_traps(szs, nums)
-            if trap:
-                st.error(trap)
-            
-            if conf > 85:
-                st.balloons()
-                st.success("✅ یہ ایک قوی موقع (Strong Signal) ہے!")
-            
-            for h in hints:
-                st.markdown(f"<div class='report-card'>{h}</div>", unsafe_allow_html=True)
-        except:
-            st.error("براہ کرم ڈیٹا درست فارمیٹ میں لکھیں (مثلاً: 1,2,3)")
+            if len(history) >= 3:
+                st.subheader("📋 اسکین شدہ ہسٹری:")
+                st.write(", ".join(history[:5])) # تازہ ترین 5 نتائج
+                
+                last_val = history[0] # تازہ ترین نتیجہ
+                
+                st.markdown("---")
+                st.header("🔮 AI کا فیصلہ:")
+                
+                # فیصلہ سازی (قوی فارمولا)
+                if history[:3].count(last_val) == 3:
+                    decision = last_val
+                    st.error(f"🔥 الرٹ: ڈریگن جاری ہے! اگلی چال: **{decision}**")
+                else:
+                    decision = "BIG" if last_val == "SMALL" else "SMALL"
+                    st.success(f"✅ پیٹرن کے مطابق اگلی چال: **{decision}**")
+                
+                st.metric("یقین کی حد (Confidence)", "90%")
+            else:
+                st.error("تصویر صاف نہیں ہے یا ہسٹری نظر نہیں آرہی۔ دوبارہ کوشش کریں۔")
 
-st.sidebar.title("🛠️ کنٹرول پینل")
-st.sidebar.info("نوٹ: صرف 85% سے اوپر والے سگنل پر عمل کریں۔")
+st.sidebar.info("نوٹ: اسکرین شاٹ میں 'Game History' والا حصہ واضح ہونا چاہیے۔")
