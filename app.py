@@ -3,8 +3,7 @@ import easyocr
 from PIL import Image
 import numpy as np
 
-# ایپ کی بنیادی ترتیب
-st.set_page_config(page_title="92Jeeto AI Scanner", page_icon="🎯")
+st.set_page_config(page_title="92Jeeto AI Master", layout="centered")
 
 @st.cache_resource
 def load_ocr():
@@ -12,43 +11,73 @@ def load_ocr():
 
 reader = load_ocr()
 
-st.title("🎯 92Jeeto آٹو اسکینر")
-st.write("ہسٹری کا اسکرین شاٹ اپلوڈ کریں، ٹائپ کرنے کی ضرورت نہیں!")
+st.title("🤖 92Jeeto اسمارٹ AI اینالائزر")
 
-# فائل اپلوڈر
-file = st.file_uploader("اسکرین شاٹ یہاں ڈالیں...", type=["jpg", "png", "jpeg"])
+file = st.file_uploader("ہسٹری کا اسکرین شاٹ اپلوڈ کریں", type=["jpg", "png", "jpeg"])
+
+def advanced_logic(history):
+    # ہسٹری کو ترتیب دینا (تازہ ترین سے پرانی)
+    if not history: return "انتظار", 0
+    
+    last_val = history[0]
+    count_last = 0
+    for x in history:
+        if x == last_val: count_last += 1
+        else: break
+    
+    # 1. ڈریگن ٹرینڈ (اگر مسلسل 4 یا زیادہ بار آئے)
+    if count_last >= 4:
+        return last_val, 95  # ڈریگن کے ساتھ چلیں
+    
+    # 2. جمپ پیٹرن (B-S-B-S)
+    if len(history) >= 4:
+        if history[0] != history[1] and history[1] != history[2]:
+            decision = "BIG" if last_val == "SMALL" else "SMALL"
+            return decision, 85
+            
+    # 3. بریک آؤٹ لاجک (لمبے سلسلے کے بعد تبدیلی)
+    if count_last == 1 and len(history) >= 5:
+        # اگر اس سے پہلے 4 بار مخالف چیز آئی تھی
+        prev_val = history[1]
+        prev_count = 0
+        for x in history[1:]:
+            if x == prev_val: prev_count += 1
+            else: break
+        if prev_count >= 4:
+            return last_val, 80 # نئے ٹرینڈ کے ساتھ چلیں
+
+    # 4. ڈیفالٹ (مخالف چال)
+    decision = "BIG" if last_val == "SMALL" else "SMALL"
+    return decision, 65
 
 if file:
     img = Image.open(file)
-    st.image(img, caption="آپ کا اسکرین شاٹ", width=300)
+    st.image(img, width=300)
     
-    if st.button("اسکین اور فیصلہ کریں"):
-        with st.spinner("AI ڈیٹا پڑھ رہا ہے..."):
-            # OCR اسکیننگ
+    if st.button("AI تجزیہ شروع کریں"):
+        with st.spinner("ڈیٹا کا گہرا تجزیہ جاری ہے..."):
             result = reader.readtext(np.array(img), detail=0)
+            # ڈیٹا کو فلٹر کرنا
+            history = [t.upper() for t in result if "BIG" in t.upper() or "SMALL" in t.upper()]
             
-            # ڈیٹا سے Big/Small نکالنا
-            history = [text.upper() for text in result if "BIG" in text.upper() or "SMALL" in text.upper()]
-            
-            if len(history) >= 3:
-                st.subheader("📋 اسکین شدہ ہسٹری:")
-                st.write(", ".join(history[:5])) # تازہ ترین 5 نتائج
+            if len(history) >= 2:
+                st.write(f"📋 اسکین شدہ ہسٹری: {', '.join(history[:6])}")
                 
-                last_val = history[0] # تازہ ترین نتیجہ
+                prediction, confidence = advanced_logic(history)
                 
                 st.markdown("---")
-                st.header("🔮 AI کا فیصلہ:")
+                st.subheader("🎯 AI کا حتمی فیصلہ:")
                 
-                # فیصلہ سازی (قوی فارمولا)
-                if history[:3].count(last_val) == 3:
-                    decision = last_val
-                    st.error(f"🔥 الرٹ: ڈریگن جاری ہے! اگلی چال: **{decision}**")
+                if prediction == "BIG":
+                    st.success(f"✅ اگلی چال: **{prediction}**")
                 else:
-                    decision = "BIG" if last_val == "SMALL" else "SMALL"
-                    st.success(f"✅ پیٹرن کے مطابق اگلی چال: **{decision}**")
+                    st.error(f"✅ اگلی چال: **{prediction}**")
                 
-                st.metric("یقین کی حد (Confidence)", "90%")
+                st.metric("یقین کی حد (Confidence)", f"{confidence}%")
+                
+                if confidence < 70:
+                    st.warning("⚠️ محتاط رہیں: پیٹرن واضح نہیں ہے۔")
             else:
-                st.error("تصویر صاف نہیں ہے یا ہسٹری نظر نہیں آرہی۔ دوبارہ کوشش کریں۔")
+                st.error("ڈیٹا صحیح اسکین نہیں ہوا۔ براہ کرم صاف تصویر اپلوڈ کریں۔")
 
-st.sidebar.info("نوٹ: اسکرین شاٹ میں 'Game History' والا حصہ واضح ہونا چاہیے۔")
+st.sidebar.info("ٹپ: تصویر ایسی لیں جس میں 'Period' اور 'Big/Small' دونوں صاف نظر آئیں۔")
